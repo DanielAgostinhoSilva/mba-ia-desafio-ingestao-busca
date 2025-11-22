@@ -176,7 +176,6 @@ def ingest_pdf():
 
     # Garante extensão pgvector
     _ensure_pgvector_extension(conn_str)
-    # _ensure_pgvector_extension(f"dbname={pg_db} user={pg_user} password={pg_pass} host={pg_host} port={pg_port}")
 
     # Coleção baseada no nome do arquivo
     base_name = os.path.splitext(os.path.basename(pdf_path))[0]

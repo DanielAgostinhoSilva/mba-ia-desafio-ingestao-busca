@@ -46,5 +46,6 @@ pg-logs:
 llama3:
 	curl -N -H "Content-Type: application/json" http://localhost:11434/api/pull -d '{"name":"llama3"}'
 
+# baixa o modelo nomic-embed-text no ollama via API
 nomic-embed-text:
 	curl -N -H "Content-Type: application/json" http://localhost:11434/api/pull -d '{"name":"nomic-embed-text"}'
