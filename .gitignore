@@ -39,7 +39,6 @@ htmlcov/
 
 # Local environment files
 .env
-.env.*
 
 # Docker
 # (We keep docker-compose.yml tracked; ignore any local overrides if created)
