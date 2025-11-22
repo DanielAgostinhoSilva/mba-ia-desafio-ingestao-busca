@@ -1,0 +1,46 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Unit test / coverage reports
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.mypy_cache/
+.pytype/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.iml
+
+# OS-specific
+.DS_Store
+
+# Logs
+*.log
+
+# Local environment files
+.env
+.env.*
+
+# Docker
+# (We keep docker-compose.yml tracked; ignore any local overrides if created)
+docker-compose.override.yml
