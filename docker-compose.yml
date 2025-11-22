@@ -12,7 +12,7 @@ services:
     platform: linux/arm64  # Compatível com Apple Silicon
 
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     container_name: postgres
     environment:
       - POSTGRES_USER=postgres

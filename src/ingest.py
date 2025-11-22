@@ -2,6 +2,32 @@ import os
 import platform
 import subprocess
 from dotenv import load_dotenv
+import ollama
+import psycopg2
+
+# Importações de terceiros utilizadas no fluxo principal
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_ollama.embeddings import OllamaEmbeddings
+try:
+    from langchain_community.vectorstores.pgvector import PGVector
+except Exception as _pgv_err:
+    PGVector = None  # type: ignore
+    _PGV_IMPORT_ERROR = _pgv_err
+else:
+    _PGV_IMPORT_ERROR = None
+
+# Importações condicionais para GUI (evitar problemas no macOS)
+if platform.system() != "Darwin":
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception:
+        tk = None
+        filedialog = None
+else:
+    tk = None
+    filedialog = None
 
 # Carrega variáveis de ambiente de um arquivo .env, se presente
 load_dotenv()
@@ -33,8 +59,8 @@ def _select_pdf_with_gui() -> "Optional[str]":
             return None
 
         # Recurso ao tkinter em plataformas não macOS
-        import tkinter as tk
-        from tkinter import filedialog
+        if tk is None or filedialog is None:
+            return None
 
         root = tk.Tk()
         root.withdraw()  # Oculta a janela principal
@@ -89,11 +115,32 @@ def resolve_pdf_path(initial_path: "Optional[str]") -> "Optional[str]":
     return None
 
 
+def _env(name: str, default: str) -> str:
+    """Obtém variável de ambiente com padrão."""
+    val = os.getenv(name)
+    return val if val not in (None, "") else default
+
+
+def _ensure_pgvector_extension(conn_str: str) -> None:
+    try:
+        conn = psycopg2.connect(conn_str)  # type: ignore
+        conn.autocommit = True
+        cur = conn.cursor()
+        cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Aviso: não foi possível garantir a extensão pgvector: {e}")
+
+
 def ingest_pdf():
     """Ponto de entrada para processar o arquivo PDF.
 
-    Atualmente esta função apenas resolve e imprime o caminho do PDF. Substitua o
-    print pela lógica real de ingestão conforme necessário.
+    Fluxo de ingestão:
+    - Carrega o PDF.
+    - Divide em chunks de 1000 caracteres com overlap de 150.
+    - Gera embeddings de cada chunk via LangChain.
+    - Armazena os vetores no PostgreSQL com pgVector.
     """
     pdf_path = resolve_pdf_path(PDF_PATH)
     if not pdf_path:
@@ -101,7 +148,57 @@ def ingest_pdf():
         return
 
     print(f"PDF selecionado: {pdf_path}")
-    # TODO: Adicione aqui a lógica de ingestão do PDF usando `pdf_path`.
+
+    # Importações já estão no topo do arquivo (LangChain, PGVector, etc.)
+
+    # 1) Carrega páginas do PDF
+    loader = PyPDFLoader(pdf_path)
+    pages = loader.load()
+    if not pages:
+        print("Nenhum conteúdo encontrado no PDF.")
+        return
+
+    # 2) Split em chunks
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+    docs = splitter.split_documents(pages)
+    print(f"Total de chunks gerados: {len(docs)}")
+
+    # 3) Embeddings com Ollama (modelo configurável)
+    embeddings = OllamaEmbeddings(model="nomic-embed-text")
+
+    # 4) Conexão ao Postgres/pgvector
+    pg_user = _env("PGUSER", _env("POSTGRES_USER", "postgres"))
+    pg_pass = _env("PGPASSWORD", _env("POSTGRES_PASSWORD", "postgres"))
+    pg_host = _env("PGHOST", "localhost")
+    pg_port = _env("PGPORT", "5432")
+    pg_db = _env("PGDATABASE", _env("POSTGRES_DB", "app"))
+    conn_str = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
+
+    # Garante extensão pgvector
+    _ensure_pgvector_extension(conn_str)
+    # _ensure_pgvector_extension(f"dbname={pg_db} user={pg_user} password={pg_pass} host={pg_host} port={pg_port}")
+
+    # Coleção baseada no nome do arquivo
+    base_name = os.path.splitext(os.path.basename(pdf_path))[0]
+    collection = _env("PGVECTOR_COLLECTION", f"pdf_{base_name}")
+
+    # 5) Persiste vetores; pre_delete_collection=True para reprocessamentos
+    print(f"Gravando vetores na coleção: {collection}")
+
+    try:
+        _ = PGVector.from_documents(
+            documents=docs,
+            embedding=embeddings,
+            collection_name=collection,
+            connection_string=conn_str,
+            use_jsonb=True,
+            pre_delete_collection=True,
+        )
+    except Exception as e:
+        print(f"Erro ao salvar vetores no PostgreSQL: {e}")
+        return
+
+    print("Ingestão concluída com sucesso.")
 
 
 if __name__ == "__main__":

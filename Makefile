@@ -5,7 +5,10 @@
 start:
 	 $(MAKE) ai-start
 	 $(MAKE) pg-start
-	 $(MAKE) llama3
+	 $(MAKE) nomic-embed-text
+
+clean:
+	docker compose down -v --remove-orphans
 
 # inicia o servico do ollama
 ai-start:
@@ -42,3 +45,6 @@ pg-logs:
 # baixa o modelo llama3 no ollama via API
 llama3:
 	curl -N -H "Content-Type: application/json" http://localhost:11434/api/pull -d '{"name":"llama3"}'
+
+nomic-embed-text:
+	curl -N -H "Content-Type: application/json" http://localhost:11434/api/pull -d '{"name":"nomic-embed-text"}'
